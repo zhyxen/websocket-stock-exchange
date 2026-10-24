@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Торгова Біржа (WebSocket)</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 30px; background: #f4f6f9; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .status-box { font-weight: bold; padding: 10px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
+        .online { background: #d4edda; color: #155724; }
+        .offline { background: #f8d7da; color: #721c24; }
+        .form-section { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; flex: 1; }
+        button { padding: 8px 16px; background: #005599; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #003366; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background: #003366; color: white; }
+        .price-input { width: 90px; padding: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📊 Моніторинг Торгової Біржі (WebSocket)</h2>
+        <div id="status" class="status-box offline">Підключення до сервера ws://localhost:8080...</div>
+
+        <h3>Додати новий актив</h3>
+        <div class="form-section">
+            <input type="text" id="assetName" placeholder="Назва активу (напр. NVDA)">
+            <input type="number" id="assetPrice" placeholder="Ціна ($)">
+            <button onclick="addAsset()">Додати актив</button>
+        </div>
+
+        <h3>Активні торгівельні пари</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Назва активу</th>
+                    <th>Поточна ціна ($)</th>
+                    <th>Дія</th>
+                </tr>
+            </thead>
+            <tbody id="assetsTable"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:8080');
+        const statusDiv = document.getElementById('status');
+        const tableBody = document.getElementById('assetsTable');
+
+        ws.onopen = () => {
+            statusDiv.textContent = '🟢 З’єднання з біржею встановлено (ws://localhost:8080)';
+            statusDiv.className = 'status-box online';
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'GET_ASSETS' || data.type === 'UPDATE_ASSETS') {
+                renderAssets(data.payload);
+            }
+        };
+
+        ws.onclose = () => {
+            statusDiv.textContent = '🔴 З’єднання з біржею закрито';
+            statusDiv.className = 'status-box offline';
+        };
+
+        function renderAssets(assets) {
+            tableBody.innerHTML = '';
+            assets.forEach(a => {
+                tableBody.innerHTML += `
+                    <tr>
+                        <td>${a.id}</td>
+                        <td><strong>${a.name}</strong></td>
+                        <td style="font-size: 1.1em; color: #007bff;">$${a.price}</td>
+                        <td>
+                            <input type="number" id="price_${a.id}" class="price-input" placeholder="Нова ціна">
+                            <button onclick="updatePrice(${a.id})">Оновити ціну</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function addAsset() {
+            const name = document.getElementById('assetName').value;
+            const price = document.getElementById('assetPrice').value;
+            if (name && price) {
+                ws.send(JSON.stringify({
+                    type: 'ADD_ASSET',
+                    payload: { name: name, price: price }
+                }));
+                document.getElementById('assetName').value = '';
+                document.getElementById('assetPrice').value = '';
+            }
+        }
+
+        function updatePrice(id) {
+            const newPrice = document.getElementById(`price_${id}`).value;
+            if (newPrice) {
+                ws.send(JSON.stringify({
+                    type: 'UPDATE_PRICE',
+                    payload: { id: id, price: newPrice }
+                }));
+            }
+        }
+    </script>
+</body>
+</html>
